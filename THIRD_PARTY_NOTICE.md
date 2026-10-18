@@ -1,13 +1,16 @@
 # Method and repository notice
 
-This implementation is a clean experimental bridge written for the supplied task.
-It does not claim to reproduce the complete PIXEL training system.
+This repository implements a conditional GAN experiment with representation-space
+Fréchet loss. It does not implement the complete PIXEL training and localization
+system.
 
-- The differentiable Fréchet-loss idea and stop-gradient normalization follow the
-  supplied FD-Loss paper/repository concept.
-- The use of healthy/diseased CheXpert chest X-rays and conditional image generation
-  is motivated by the supplied PIXEL paper/repository.
-- The supplied FD-Loss and PIXEL archives remain reference material and are not
-  required at runtime by this project.
-
-When writing a report, cite both original papers and their official repositories.
+- Differentiable Fréchet loss and stop-gradient normalization are based on
+  Representation Fréchet Loss for Visual Generation and the FD-Loss repository:
+  https://github.com/Jiawei-Yang/FD-Loss
+- The chest X-ray conditional generation setting is related to PIXEL:
+  https://doi.org/10.1038/s41551-025-01456-y
+- Neither upstream archive is bundled or required at runtime. Refer to the
+  original papers and repositories when using or extending these methods.
+- CheXpert images, patient-level manifests, and model checkpoints are not
+  distributed here. Data access and upstream model terms apply independently
+  of the MIT license for this implementation.

@@ -1,17 +1,23 @@
 # CXR FD Generation
 
-将表征空间 Fréchet 距离用于 CheXpert 条件图像生成的研究项目整理。
+CheXpert胸部X光条件生成与表征空间Fréchet损失适配。提供二分类条件GAN、可微历史特征队列，以及数据准备、医学特征训练、分布统计和生成评价流程。
 
-## 当前源码能做什么
+## 实现范围
 
-本包是早期二分类条件 GAN + 可微 FeatureQueue FD 的参考实现，输出 128×128 单通道图像。保留数据清单、分类器、真实统计、生成训练与评测入口。
+- `No Finding`与`Pleural Effusion`二分类数据清单，按患者互斥划分。
+- 128×128单通道条件GAN与投影判别器。
+- 冻结医学编码器、类别条件FD与可微FeatureQueue统计。
+- 共同预训练检查点初始化的Base/FD分支对照。
+- 环境自检、日志、检查点恢复及图像与分布评价入口。
 
-最终 Core5 多标签、EMA、梯度平衡及 FD-SIM 医学适配脚本/权重缺失，当前代码不能直接复现这些历史结果。相关实验协议与数值在项目档案中单列，绝不把原 FD-loss 仓库当作个人最终源码。
+Core5七维条件、EMA统计、完整梯度平衡及FD-SIM后训练的最终脚本和权重未分发。它们的历史结果与可运行的二分类实现分开列于 [实验协议](docs/experiments.md)。本仓库不包含PIXEL完整扩散训练或病灶定位实现。
 
-## 准备与入口
+## 安装与运行
+
+先安装适配设备的PyTorch和torchvision，再安装依赖：
 
 ```bash
-pip install -r requirements.txt
+python -m pip install -r requirements.txt
 python -m scripts.prepare_manifest --help
 python -m scripts.train_classifier --help
 python -m scripts.compute_real_stats --help
@@ -19,25 +25,30 @@ python -m scripts.train_gan --help
 python -m scripts.evaluate --help
 ```
 
-请先安装匹配的 torch/torchvision。数据需要自行按官方访问要求准备；仓库不包含 CheXpert 数据、病人级清单、模型权重或服务器凭据。`README_RUNBOOK_CN.md` 是早期二分类的历史运行手册，路径为占位符，不代表最终实验复现脚本。
+数据需按CheXpert访问条款自行准备，仓库不分发影像、患者级数据清单或训练权重。完整二分类配置步骤见 [运行手册](README_RUNBOOK_CN.md)，路径占位符须替换为本地目录。
 
-## 参考方法
+## 方法
 
-- FD-loss: https://github.com/Jiawei-Yang/FD-Loss ，arXiv:2604.28190。
-- PIXEL: DOI 10.1038/s41551-025-01456-y。使用其研究方向与数据背景，不声明完整复现其扩散与定位系统。
+生成图像通过冻结的医学特征网络后，比较生成与真实特征的均值和协方差。历史队列保存detach特征，当前批特征保持可微，反传后再更新缓存。FD作为辅助目标与对抗损失共同训练生成器。实现与梯度路径见 [架构说明](docs/project_guide.md)。
 
-## 本次代码修正
+## 历史Core5结果
 
-把 FeatureQueue 中两个不合法的 `tensor.to(other_tensor, dtype=...)` 调用改为显式 `device=..., dtype=...`。只做语法与代码审查；未重训、未重新验证历史性能。
+| 宏平均指标 | Base28 | Queue2048 |
+|---|---:|---:|
+| FID ↓ | 59.4950 | 57.4315 |
+| CXR-FD ↓ | 24.6504 | 14.6423 |
+| 严格五病种Exact Match ↑ | 8.29% | 11.40% |
 
+分支从Common20各续训8轮，医学评价采用独立DenseNet-121。该表是历史协议结果，不是当前二分类入口的复现报告。分布距离改善不等于临床有效性，部分病种条件指标仍有下降。详情见 [实验协议与结果](docs/experiments.md)。
 
-## 阅读与面试
+## 文档与来源
 
-- [项目档案](docs/project_guide.md)
-- [核心问题与递进追问](docs/interview_qa.md)
+- [架构与FD实现](docs/project_guide.md)
+- [二分类运行手册](README_RUNBOOK_CN.md)
+- [实验协议与结果](docs/experiments.md)
+- [FD-Loss](https://github.com/Jiawei-Yang/FD-Loss)，Representation Fréchet Loss for Visual Generation
+- PIXEL论文：[10.1038/s41551-025-01456-y](https://doi.org/10.1038/s41551-025-01456-y)
 
-## 本次整理的验证边界
+## 许可证
 
-采用历史材料，不重跑训练。Python 语法检查不能证明模型效果或历史指标已复现。缺失资源明确保留；源码整理和历史实验结果分别记录。
-
-补充静态修正：为导入 src 的脚本增加项目根目录的模块搜索路径，使直接运行与 -m 入口一致；未运行这些训练脚本。
+代码使用 [MIT License](LICENSE)。方法来源与数据、模型的独立授权见 [第三方声明](THIRD_PARTY_NOTICE.md)。

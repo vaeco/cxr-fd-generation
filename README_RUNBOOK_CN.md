@@ -1,25 +1,12 @@
-# CheXpert 条件生成 + Class-conditional FD-loss 完整实验手册
+# CheXpert二分类FD实验运行手册
 
-版本：1.0（以可复现、可截图汇报、单张 24 GB GPU 可完成为目标）
+本手册对应当前二分类条件GAN和FeatureQueue实现，不对应Core5最终多标签实验。数据与检查点需单独准备，所有路径占位符应替换为实际目录。
 
-## 1. 直接结论：选哪台服务器和哪个镜像
+## 1. 环境与资源
 
-在你截图中的选项里，首选：
+参考环境为Linux、Conda、Python3.11.9、PyTorch2.6.0和CUDA12.4。训练默认使用128×128灰度图与batch64，可按设备资源调整。数据、缓存、日志和检查点建议放在容量充足的数据盘；具体显存与耗时应通过实际配置测量。
 
-| 项目 | 选择 |
-|---|---|
-| 区域 | 华东一区（数据上传方便即可；区域不会改变实验结果） |
-| GPU | **4090-24GB，¥1.69/时**；如果这一档售罄，选 ¥1.78/时的 4090-24GB |
-| 系统盘 | 30 GB 或以上 |
-| 数据盘 | **100 GB 或以上**，挂载点使用 `/path/to/workspace` |
-| 基础镜像 | **Miniconda / conda3 / Python 3.12 / CUDA 12.4 / Ubuntu 22.04** |
-| 项目内环境 | 新建 `cxrfd`，Python 3.11.9，PyTorch 2.6.0 + CUDA 12.4 |
-
-为什么这是最合适的：本项目用 128×128 灰度图、batch 64、单卡训练；24 GB 足够。4090 比 A10G 快很多，且比 4090D-48G、5090、6000D 便宜。5090 对较旧 PyTorch/CUDA 组合更容易出现架构兼容问题；48/84 GB 显存对本方案不是必需。基础镜像只借用驱动、CUDA 和 Conda，实际依赖全部装进隔离环境，所以不采用截图中的 PyTorch 2.9.1/Python 3.12 作为实验环境。
-
-预计占用：CheXpert-small 约十余 GB；代码、缓存、日志和检查点建议预留 30–50 GB。完整训练耗时受数据规模和节点负载影响，4090 上通常应预留约 12–20 小时。按 ¥1.69/时估算约 ¥20–34，首次运行应多留一些余额。这里的时间是保守预算，不是结果保证。
-
-## 2. 本实验到底比较什么
+## 2. 实验对照
 
 最终只保留两组，不运行“当前 batch FD”等已知不稳定对照：
 
@@ -48,15 +35,15 @@ L_G=L_{adv}+\lambda(t)L_{C\text{-}FD}.
 
 `λ(t)` 在分支前 1000 step 从 0 线性升到 0.10。特征编码器被冻结，但生成图送入编码器时没有 `detach()` 或 `no_grad()`，因此 FD 梯度能回到生成器；当前特征在反向传播完成后才写入队列。两类分开计算，避免健康和患病分布被混成一个高斯分布。
 
-这是一套“用 CheXpert 数据验证 FD-loss 对医学条件生成的作用”的可执行桥接实验，不宣称复现完整 PIXEL。提供的 PIXEL 代码依赖未随仓库提供的训练检查点/配置，而且论文级全量训练成本很高；考核要求允许只采用第二篇的数据，因此本方案比强行修补完整 PIXEL 更稳妥。
+该实现使用CheXpert数据研究FD损失在条件GAN中的作用，不包含PIXEL完整扩散训练与病灶定位流程。FD-Loss与PIXEL作为方法参考，不是运行依赖。
 
-## 3. 服务器目录：每个文件放在哪里
+## 3. 目录布局
 
 固定使用以下布局，不要把大数据放到系统盘：
 
 ```text
 /path/to/workspace/
-├── CXR_FD/                         # 本交付工程解压到这里
+├── CXR_FD/                         # 项目根目录
 │   ├── README_RUNBOOK_CN.md
 │   ├── requirements.txt
 │   ├── configs/
@@ -87,7 +74,7 @@ L_G=L_{adv}+\lambda(t)L_{C\text{-}FD}.
 │   │   ├── base/
 │   │   ├── cfd/
 │   │   └── evaluation/
-│   └── reports/                     # 汇报所需日志、环境和哈希
+│   └── reports/                     # 实验日志、环境和哈希
 ├── datasets/
 │   └── CheXpert-v1.0-small/
 │       ├── train.csv
@@ -99,9 +86,9 @@ L_G=L_{adv}+\lambda(t)L_{C\text{-}FD}.
     └── papers/
 ```
 
-真正运行只需要本工程和 `CheXpert-v1.0-small`。原始 FD-Loss、PIXEL 压缩包和两篇 PDF 不参与运行，建议仅放进 `reference/` 供引用。CheXpert 受数据协议约束，本交付物不包含影像；必须使用你已合法取得的数据。
+真正运行只需要本项目和 `CheXpert-v1.0-small`。原始 FD-Loss、PIXEL 压缩包和两篇 PDF 不参与运行，建议仅放进 `reference/` 供引用。CheXpert 受数据协议约束，仓库不包含影像；必须使用按官方条款取得的数据。
 
-## 4. 创建服务器后：系统和工程安装
+## 4. 环境与项目安装
 
 以下命令均在服务器终端中执行。建议复制一段、确认无报错后再执行下一段。
 
@@ -119,18 +106,14 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y \
 
 `nvidia-smi` 必须显示 RTX 4090 和约 24564 MiB 显存。CUDA Driver 版本可以高于 12.4；不要求 `nvcc` 等于 12.4，因为 PyTorch wheel 自带 CUDA runtime。
 
-### 4.2 上传和解压工程
-
-先通过平台文件管理器，把交付的 `CXR_FD_complete.zip` 上传到 `/path/to/workspace/`，然后执行：
+### 4.2 获取代码
 
 ```bash
-cd /path/to/workspace
-unzip -q CXR_FD_complete.zip
+git clone https://github.com/vaeco/cxr-fd-generation.git /path/to/workspace/CXR_FD
 cd /path/to/workspace/CXR_FD
-tree -L 2
 ```
 
-若 `tree` 显示成 `/path/to/workspace/CXR_FD/CXR_FD/...`，说明多套了一层目录；此时不要继续，重新解压并确保 `requirements.txt` 的绝对路径是 `/path/to/workspace/CXR_FD/requirements.txt`。
+`/path/to/workspace`表示本地工作目录。后续路径与`configs/paths.env`保持一致。
 
 ### 4.3 一次性创建全部 Python 环境
 
@@ -243,7 +226,7 @@ tmux attach -t cxrfd
 watch -n 2 nvidia-smi
 ```
 
-同时记录一分钟一次的 GPU 利用率，便于汇报：
+同时记录一分钟一次的 GPU 利用率，便于实验报告：
 
 ```bash
 nohup nvidia-smi \
@@ -262,7 +245,7 @@ python scripts/self_test.py \
   2>&1 | tee "$RUNS/env/self_test.log"
 ```
 
-立即提取截图内容：
+立即提取日志记录内容：
 
 ```bash
 grep -E '\[(ENV|GPU|PACKAGES|DATA_CHECK|ENV_PASS)\]' \
@@ -307,7 +290,7 @@ print("[PATH_EXISTS]", frame["path"].map(os.path.isfile).all())
 PY
 ```
 
-截图必须包含三个 patient overlap 都为 0、`PATH_EXISTS True`，并显示每个 split 的两类图像数量相等。`manifest.csv` 保存的是绝对路径；迁移服务器后要重新生成，不能直接沿用旧服务器的 manifest。
+日志记录必须包含三个 patient overlap 都为 0、`PATH_EXISTS True`，并显示每个 split 的两类图像数量相等。`manifest.csv` 保存的是绝对路径；迁移服务器后要重新生成，不能直接沿用旧服务器的 manifest。
 
 ## 9. 阶段 C：数据可视化与人工检查
 
@@ -324,7 +307,7 @@ grep 'DATA_VIS_READY' "$PROJECT/artifacts/visualize_terminal.log"
 
 必须人工查看：
 
-- `artifacts/data_examples.png`：两行分别为健康和胸腔积液样例；确认是正位胸片、方向正常、没有全黑图或文字截图；
+- `artifacts/data_examples.png`：两行分别为健康和胸腔积液样例；确认是正位胸片、方向正常、没有全黑图或纯文字图像；
 - `artifacts/data_distribution.png`：确认三个 split 平衡，两个类别强度分布没有离谱断层。
 
 下载图片到本地可以用平台文件管理器，或在本地终端执行（替换端口/IP）：
@@ -359,7 +342,7 @@ grep -E '\[(CLASSIFIER_EPOCH|CLASSIFIER_BEST|CLASSIFIER_FINAL)\]' \
 ls -lh "$FEATURE" "$RUNS/feature_encoder/classifier_curves.png"
 ```
 
-继续实验的最低质量门槛建议为 test AUC ≥ 0.65；若低于此值，先检查标签、数据路径和样例，不要让无效特征空间指导生成器。AUC 并非越高越能保证生成质量，但明显高于随机水平是必要条件。汇报截图使用 `CLASSIFIER_FINAL` 日志和 `classifier_curves.png`。
+继续实验的最低质量门槛建议为 test AUC ≥ 0.65；若低于此值，先检查标签、数据路径和样例，不要让无效特征空间指导生成器。AUC 并非越高越能保证生成质量，但明显高于随机水平是必要条件。实验记录使用 `CLASSIFIER_FINAL` 日志和 `classifier_curves.png`。
 
 可选实时查看 TensorBoard：
 
@@ -454,7 +437,7 @@ python -u scripts/train_gan.py \
   2>&1 | tee "$RUNS/base/terminal.log"
 ```
 
-完成后截图：
+完成后检查以下日志：
 
 ```bash
 grep -E '\[(GAN_START|EPOCH_SUMMARY|TRAINING_DONE)\]' \
@@ -502,7 +485,7 @@ ls -lh "$CFD" "$RUNS/cfd/training_curves.png"
 ls -lh "$RUNS/cfd/samples"/*.png | tail
 ```
 
-截图中应明确出现：两个 `QUEUE_INIT`（class 0 和 1）、`queue_size=4096`、`feature_dim=256`、`class_conditional=True`、`lambda_fd=0.1`。`EPOCH_SUMMARY` 会同时给出 normalized FD、两个类别的 raw FD 和生成器梯度范数。raw FD 不要求逐轮严格单调，但不能为 NaN/Inf，且整体趋势可用于描述。
+日志记录中应明确出现：两个 `QUEUE_INIT`（class 0 和 1）、`queue_size=4096`、`feature_dim=256`、`class_conditional=True`、`lambda_fd=0.1`。`EPOCH_SUMMARY` 会同时给出 normalized FD、两个类别的 raw FD 和生成器梯度范数。raw FD 不要求逐轮严格单调，但不能为 NaN/Inf，且整体趋势可用于描述。
 
 ## 15. 分支公平性审计
 
@@ -597,7 +580,7 @@ PY
 ls -lh "$RUNS/evaluation"/*.png "$RUNS/evaluation"/*.csv
 ```
 
-最终汇报应至少插入：
+最终实验报告应至少插入：
 
 - `fixed_noise_comparison.png`：相同噪声下四行 Base/C-FD × 健康/患病图像；
 - `metric_comparison.png`：FID、KID、CXR-FD、条件准确率柱状图；
@@ -605,9 +588,9 @@ ls -lh "$RUNS/evaluation"/*.png "$RUNS/evaluation"/*.csv
 - `metrics_macro_average.csv`：两类宏平均；
 - `delta_summary.json`：C-FD 相对 Base 的变化百分比。
 
-判读规则：FID/KID/CXR-FD 越低越好，condition accuracy 越高越好。最有说服力的结论是 C-FD 的独立 FID/KID 与医学 CXR-FD 同时下降，且条件准确率不下降；若只有 CXR-FD 下降而 FID/KID 变差，应写成“优化了训练特征空间中的匹配，但独立生成质量证据不足”，不能写全面优于 Base。一次训练种子属于考核级 pilot；若以后用于论文，应额外重复多个训练种子并报告均值和置信区间。
+判读规则：FID/KID/CXR-FD 越低越好，condition accuracy 越高越好。最有说服力的结论是 C-FD 的独立 FID/KID 与医学 CXR-FD 同时下降，且条件准确率不下降；若只有 CXR-FD 下降而 FID/KID 变差，应写成“优化了训练特征空间中的匹配，但独立生成质量证据不足”，不能写全面优于 Base。一次训练种子属于单训练种子的探索性实验；若以后用于论文，应额外重复多个训练种子并报告均值和置信区间。
 
-## 17. 一键整理汇报证据
+## 17. 一键整理实验报告证据
 
 训练与评价全部结束后：
 
@@ -629,7 +612,7 @@ cat "$RUNS/evaluation/metrics_macro_average.csv"
 test -f "$RUNS/gpu_monitor.pid" && kill "$(cat "$RUNS/gpu_monitor.pid")"
 ```
 
-建议的汇报截图顺序：
+建议的实验记录顺序：
 
 1. `nvidia-smi`、`ENV_PASS`、`SELF_TEST_PASS`；
 2. manifest 两类计数、三个患者交集为 0；
@@ -662,7 +645,7 @@ test -f "$RUNS/gpu_monitor.pid" && kill "$(cat "$RUNS/gpu_monitor.pid")"
 
 ### 训练中断
 
-common 可用 `runs/common/checkpoints/latest.pt` 作为 `--resume`，但命令的 `--epochs` 表示“再增加多少轮”；先用 checkpoint 中的 epoch 计算剩余轮数。Base/C-FD 中断也可恢复各自 `latest.pt`。恢复 C-FD 时脚本会同时恢复队列。为了最清楚的考核记录，若只跑了很短时间便中断，优先从共同检查点重新跑该分支。
+common 可用 `runs/common/checkpoints/latest.pt` 作为 `--resume`，但命令的 `--epochs` 表示“再增加多少轮”；先用 checkpoint 中的 epoch 计算剩余轮数。Base/C-FD 中断也可恢复各自 `latest.pt`。恢复 C-FD 时脚本会同时恢复队列。为保持分支对照一致，若只跑了很短时间便中断，优先从共同检查点重新跑该分支。
 
 ### 生成图看起来不错但指标不一致
 
@@ -683,4 +666,4 @@ common 可用 `runs/common/checkpoints/latest.pt` 作为 `--resume`，但命令�
 - 最终评价使用相同 seed、相同样本数和 test split；
 - `metrics_by_class.csv`、`metrics_macro_average.csv`、两张最终对比图、关键日志均已保存。
 
-满足这些条件后，你就拥有一套可以清楚回答“FD-loss 是否改善 CheXpert 条件胸片生成”的 Base vs Base+C-FD 实验，而不是只把两份仓库机械拼接在一起。
+完成以上检查后，可在相同起点、预算和评价协议下比较Base与Base+C-FD，并同时报告分布指标、条件一致性和样图。
