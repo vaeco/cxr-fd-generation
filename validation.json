@@ -1,0 +1,6 @@
+{
+  "python_files": 13,
+  "syntax_errors": [],
+  "existing_project_training_rerun": false,
+  "note": "Syntax checks are not inference or historical metric reproduction."
+}

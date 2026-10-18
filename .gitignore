@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+.venv/
+.env
+*.pt
+*.pth
+*.onnx
+*.zip
+*.rar
+*.cache
+runs/
+outputs/
+data/
+datasets/*
+!datasets/README.md
+.pytest_cache/
